@@ -3,21 +3,15 @@
 
 BEGIN;
 
-CREATE FUNCTION test(name varchar, value boolean)
+CREATE FUNCTION test(name varchar, VARIADIC test_results boolean[])
     RETURNS varchar AS
 $$
-DECLARE
-    text_status varchar;
-BEGIN
-    CASE value 
-        WHEN true THEN
-            text_status := 'ok';
-        ELSE 
-            text_status := 'error';
-    END CASE;
-    RETURN rpad(name || ' ', 60, '.') || ' ' || text_status;
-END;
-$$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+    SELECT
+        rpad(name || ' ', 60, '.')
+        || ' '
+        || (CASE bool_and(status) WHEN true THEN 'ok' ELSE 'error' END)
+    FROM unnest(test_results) AS results(status);
+$$ LANGUAGE 'sql' IMMUTABLE STRICT;
 
 -- Include pgrangesets.sql
 \ir pgrangesets.sql
@@ -29,12 +23,7 @@ $$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
 -- Run tests
 SELECT test(
     'Test range_merge',
-    (
-        WITH tests(status) AS (VALUES
-            (range_merge('{}'::daterange[]) = 'empty'::daterange),
-            (range_merge(ARRAY['[2000-01-01,2000-01-30)']::daterange[]) = '[2000-01-01,2000-01-30)'::daterange),
-            (range_merge(ARRAY['[2000-01-01,2000-01-30)', '[2001-01-01,2001-01-30)']::daterange[]) = '[2000-01-01,2001-01-30)'::daterange)
-        )
-        SELECT bool_and(status) FROM tests
-    )
+    (range_merge('{}'::daterange[]) = 'empty'::daterange),
+    (range_merge(ARRAY['[2000-01-01,2000-01-30)']::daterange[]) = '[2000-01-01,2000-01-30)'::daterange),
+    (range_merge(ARRAY['[2000-01-01,2000-01-30)', '[2001-01-01,2001-01-30)']::daterange[]) = '[2000-01-01,2001-01-30)'::daterange)
 );
